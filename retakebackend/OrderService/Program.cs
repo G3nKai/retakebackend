@@ -1,5 +1,6 @@
 using Microsoft.OpenApi.Models;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using OrderService.Data;
 using OrderService.Services;
 
@@ -41,6 +42,13 @@ builder.Services.AddSwaggerGen(options =>
 
 var app = builder.Build();
 
+await EnsureDatabaseExistsAsync(app.Configuration);
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<OrderDbContext>();
+    await dbContext.Database.EnsureCreatedAsync();
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -49,3 +57,31 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.Run();
+
+static async Task EnsureDatabaseExistsAsync(IConfiguration configuration)
+{
+    var connectionString = configuration.GetConnectionString("OrderDb")
+        ?? throw new InvalidOperationException("Connection string 'OrderDb' is not configured.");
+
+    var builder = new NpgsqlConnectionStringBuilder(connectionString);
+    var databaseName = builder.Database;
+    if (string.IsNullOrWhiteSpace(databaseName))
+    {
+        throw new InvalidOperationException("Database name is missing in 'OrderDb' connection string.");
+    }
+
+    builder.Database = "postgres";
+    await using var connection = new NpgsqlConnection(builder.ConnectionString);
+    await connection.OpenAsync();
+
+    var commandText = $"CREATE DATABASE \"{databaseName.Replace("\"", "\"\"")}\"";
+    await using var command = new NpgsqlCommand(commandText, connection);
+
+    try
+    {
+        await command.ExecuteNonQueryAsync();
+    }
+    catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.DuplicateDatabase)
+    {
+    }
+}
