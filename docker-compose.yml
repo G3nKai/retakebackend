@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: retake-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: retake-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_port_connectivity"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  retakebackend:
+    build:
+      context: ./retakebackend
+      dockerfile: retakebackend/Dockerfile
+    container_name: retake-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=tododb;Username=postgres;Password=postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  orderservice:
+    build:
+      context: ./retakebackend
+      dockerfile: OrderService/Dockerfile
+    container_name: order-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__OrderDb: Host=postgres;Port=5432;Database=ordersdb;Username=postgres;Password=postgres
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: guest
+      RabbitMq__Password: guest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8081:8080"
+
+  driverservice:
+    build:
+      context: ./retakebackend
+      dockerfile: DriverService/Dockerfile
+    container_name: driver-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DriverDb: Host=postgres;Port=5432;Database=driversdb;Username=postgres;Password=postgres
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: guest
+      RabbitMq__Password: guest
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8082:8080"
+
+volumes:
+  postgres_data:
