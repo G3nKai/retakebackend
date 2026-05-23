@@ -6,7 +6,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<OrderDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("OrderDb")));
-builder.Services.AddHttpClient<DriverGatewayClient>();
+builder.Services.AddSingleton<DriverGatewayClient>();
 builder.Services.AddScoped<OrdersService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();

@@ -1,20 +1,87 @@
-using System.Net.Http.Json;
+using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Json;
 using OrderService.Contracts;
+using RabbitMQ.Client;
+using RabbitMQ.Client.Events;
 
 namespace OrderService.Services;
 
-public class DriverGatewayClient(HttpClient httpClient, IConfiguration configuration)
+public class DriverGatewayClient : IDisposable
 {
-    private readonly string _baseUrl = configuration["DriverService:BaseUrl"] ?? "http://localhost:5002";
+    private const string GetAvailableQueue = "driver.get-available.rpc";
+    private const string AssignOrderQueue = "driver.assign-order.rpc";
+
+    private readonly IConnection _connection;
+    private readonly IModel _channel;
+    private readonly string _replyQueueName;
+    private readonly EventingBasicConsumer _consumer;
+    private readonly ConcurrentDictionary<string, TaskCompletionSource<string>> _pending = new();
+
+    public DriverGatewayClient(IConfiguration configuration)
+    {
+        var factory = new ConnectionFactory
+        {
+            HostName = configuration["RabbitMq:Host"] ?? "localhost",
+            UserName = configuration["RabbitMq:User"] ?? "guest",
+            Password = configuration["RabbitMq:Password"] ?? "guest"
+        };
+
+        _connection = factory.CreateConnection();
+        _channel = _connection.CreateModel();
+
+        _channel.QueueDeclare(GetAvailableQueue, durable: false, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(AssignOrderQueue, durable: false, exclusive: false, autoDelete: false);
+
+        var replyQueue = _channel.QueueDeclare(queue: string.Empty, durable: false, exclusive: true, autoDelete: true);
+        _replyQueueName = replyQueue.QueueName;
+
+        _consumer = new EventingBasicConsumer(_channel);
+        _consumer.Received += (_, ea) =>
+        {
+            var correlationId = ea.BasicProperties.CorrelationId;
+            if (correlationId is null || !_pending.TryRemove(correlationId, out var tcs)) return;
+
+            var response = Encoding.UTF8.GetString(ea.Body.ToArray());
+            tcs.TrySetResult(response);
+        };
+
+        _channel.BasicConsume(_replyQueueName, autoAck: true, _consumer);
+    }
 
     public async Task<DriverSummary?> GetAvailableDriverAsync(CancellationToken cancellationToken = default)
     {
-        return await httpClient.GetFromJsonAsync<DriverSummary>($"{_baseUrl}/drivers/available", cancellationToken);
+        var response = await CallAsync<GetAvailableDriverRpcResponse>(GetAvailableQueue, new GetAvailableDriverRpcRequest(), cancellationToken);
+        return response.Found ? response.Driver : null;
     }
 
     public async Task<bool> AssignOrderToDriverAsync(Guid driverId, Guid orderId, CancellationToken cancellationToken = default)
     {
-        var response = await httpClient.PostAsJsonAsync($"{_baseUrl}/drivers/{driverId}/assign-order", new AssignOrderToDriverRequest(orderId), cancellationToken);
-        return response.IsSuccessStatusCode;
+        var response = await CallAsync<AssignOrderRpcResponse>(AssignOrderQueue, new AssignOrderRpcRequest(driverId, orderId), cancellationToken);
+        return response.Success;
+    }
+
+    private async Task<TResponse> CallAsync<TResponse>(string queue, object request, CancellationToken cancellationToken)
+    {
+        var correlationId = Guid.NewGuid().ToString();
+        var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _pending[correlationId] = tcs;
+
+        var props = _channel.CreateBasicProperties();
+        props.CorrelationId = correlationId;
+        props.ReplyTo = _replyQueueName;
+
+        var messageBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
+        _channel.BasicPublish(exchange: string.Empty, routingKey: queue, basicProperties: props, body: messageBytes);
+
+        using var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
+        var json = await tcs.Task;
+        return JsonSerializer.Deserialize<TResponse>(json) ?? throw new InvalidOperationException("Invalid RPC response");
+    }
+
+    public void Dispose()
+    {
+        _channel.Dispose();
+        _connection.Dispose();
     }
 }
