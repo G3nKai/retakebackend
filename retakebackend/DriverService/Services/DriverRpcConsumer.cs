@@ -82,7 +82,7 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
         var success = driversService.AssignOrderAsync(request.DriverId, request.OrderId).GetAwaiter().GetResult();
         var driver = driversService.GetByIdAsync(request.DriverId).GetAwaiter().GetResult();
 
-        return JsonSerializer.Serialize(new AssignOrderRpcResponse(success, driver?.Name, request.ClientId));
+        return JsonSerializer.Serialize(new AssignOrderRpcResponse(success, driver?.Name, null));
     }
 
     private static void Reply(IModel channel, BasicDeliverEventArgs ea, string response)
