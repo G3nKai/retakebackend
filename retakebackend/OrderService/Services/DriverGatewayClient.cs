@@ -11,6 +11,7 @@ public class DriverGatewayClient : IDisposable
 {
     private const string GetAvailableQueue = "driver.get-available.rpc";
     private const string AssignOrderQueue = "driver.assign-order.rpc";
+    private const string NotificationQueue = "notifications.order-created";
 
     private readonly IConnection _connection;
     private readonly IModel _channel;
@@ -30,8 +31,9 @@ public class DriverGatewayClient : IDisposable
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
-        _channel.QueueDeclare(GetAvailableQueue, durable: false, exclusive: false, autoDelete: false);
-        _channel.QueueDeclare(AssignOrderQueue, durable: false, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(GetAvailableQueue, durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(AssignOrderQueue, durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(NotificationQueue, durable: false, exclusive: false, autoDelete: false);
 
         var replyQueue = _channel.QueueDeclare(queue: string.Empty, durable: false, exclusive: true, autoDelete: true);
         _replyQueueName = replyQueue.QueueName;
@@ -41,9 +43,7 @@ public class DriverGatewayClient : IDisposable
         {
             var correlationId = ea.BasicProperties.CorrelationId;
             if (correlationId is null || !_pending.TryRemove(correlationId, out var tcs)) return;
-
-            var response = Encoding.UTF8.GetString(ea.Body.ToArray());
-            tcs.TrySetResult(response);
+            tcs.TrySetResult(Encoding.UTF8.GetString(ea.Body.ToArray()));
         };
 
         _channel.BasicConsume(_replyQueueName, autoAck: true, _consumer);
@@ -55,10 +55,15 @@ public class DriverGatewayClient : IDisposable
         return response.Found ? response.Driver : null;
     }
 
-    public async Task<bool> AssignOrderToDriverAsync(Guid driverId, Guid orderId, CancellationToken cancellationToken = default)
+    public async Task<AssignOrderRpcResponse> AssignOrderToDriverAsync(Guid driverId, Guid orderId, Guid clientId, CancellationToken cancellationToken = default)
+        => await CallAsync<AssignOrderRpcResponse>(AssignOrderQueue, new AssignOrderRpcRequest(driverId, orderId, clientId), cancellationToken);
+
+    public void PublishOrderAssignedEvent(OrderAssignedNotificationEvent notification)
     {
-        var response = await CallAsync<AssignOrderRpcResponse>(AssignOrderQueue, new AssignOrderRpcRequest(driverId, orderId), cancellationToken);
-        return response.Success;
+        var props = _channel.CreateBasicProperties();
+        props.MessageId = $"{notification.OrderId}:{notification.DriverId}";
+        var body = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(notification));
+        _channel.BasicPublish(string.Empty, NotificationQueue, props, body);
     }
 
     private async Task<TResponse> CallAsync<TResponse>(string queue, object request, CancellationToken cancellationToken)
@@ -70,18 +75,14 @@ public class DriverGatewayClient : IDisposable
         var props = _channel.CreateBasicProperties();
         props.CorrelationId = correlationId;
         props.ReplyTo = _replyQueueName;
+        props.Persistent = true;
 
-        var messageBytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request));
-        _channel.BasicPublish(exchange: string.Empty, routingKey: queue, basicProperties: props, body: messageBytes);
+        _channel.BasicPublish(string.Empty, queue, props, Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request)));
 
         using var registration = cancellationToken.Register(() => tcs.TrySetCanceled(cancellationToken));
         var json = await tcs.Task;
         return JsonSerializer.Deserialize<TResponse>(json) ?? throw new InvalidOperationException("Invalid RPC response");
     }
 
-    public void Dispose()
-    {
-        _channel.Dispose();
-        _connection.Dispose();
-    }
+    public void Dispose() { _channel.Dispose(); _connection.Dispose(); }
 }
