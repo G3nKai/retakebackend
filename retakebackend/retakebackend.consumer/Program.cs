@@ -2,9 +2,9 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using retakebackend.Auth;
-using retakebackend.Data;
-using retakebackend.Services;
+using retakebackend.consumer.Auth;
+using retakebackend.consumer.Data;
+using retakebackend.consumer.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,18 +27,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+builder.Services.AddDbContext<ReplicaDbContext>(opt =>
+    opt.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 builder.Services.AddScoped<JwtTokenService>();
-builder.Services.AddSingleton<RabbitPublisher>();
-
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-
+builder.Services.AddHostedService<RabbitConsumerService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
-
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -50,10 +47,9 @@ app.UseAuthorization();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<ReplicaDbContext>();
     db.Database.EnsureCreated();
 }
 
 app.MapControllers();
-
 app.Run();

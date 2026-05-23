@@ -1,0 +1,21 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+
+namespace retakebackend.consumer.Auth;
+
+public class JwtTokenService(IOptions<JwtOptions> options)
+{
+    private readonly JwtOptions _options = options.Value;
+    public string CreateToken(string username)
+    {
+        var claims = new[] { new Claim(ClaimTypes.Name, username) };
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_options.Key));
+        var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+        var token = new JwtSecurityToken(_options.Issuer, _options.Audience, claims,
+            expires: DateTime.UtcNow.AddMinutes(_options.ExpirationMinutes), signingCredentials: credentials);
+        return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+}
