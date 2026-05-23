@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "DriverService": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:62448;http://localhost:62449"
+    }
+  }
+}
