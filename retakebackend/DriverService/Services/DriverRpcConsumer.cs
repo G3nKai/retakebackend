@@ -6,7 +6,7 @@ using RabbitMQ.Client.Events;
 
 namespace DriverService.Services;
 
-public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration configuration) : BackgroundService
+public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration configuration, ILogger<DriverRpcConsumer> logger) : BackgroundService
 {
     private const string GetAvailableQueue = "driver.get-available.rpc";
     private const string AssignOrderQueue = "driver.assign-order.rpc";
@@ -15,7 +15,8 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
     {
         HostName = configuration["RabbitMq:Host"] ?? "localhost",
         UserName = configuration["RabbitMq:User"] ?? "guest",
-        Password = configuration["RabbitMq:Password"] ?? "guest"
+        Password = configuration["RabbitMq:Password"] ?? "guest",
+        DispatchConsumersAsync = true
     };
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
@@ -23,32 +24,40 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
         var connection = _factory.CreateConnection();
         var channel = connection.CreateModel();
 
-        channel.QueueDeclare(GetAvailableQueue, durable: false, exclusive: false, autoDelete: false);
-        channel.QueueDeclare(AssignOrderQueue, durable: false, exclusive: false, autoDelete: false);
+        channel.QueueDeclare(GetAvailableQueue, durable: true, exclusive: false, autoDelete: false);
+        channel.QueueDeclare(AssignOrderQueue, durable: true, exclusive: false, autoDelete: false);
+        channel.BasicQos(0, 1, false);
 
-        var getAvailableConsumer = new EventingBasicConsumer(channel);
-        getAvailableConsumer.Received += (_, ea) =>
+        var getAvailableConsumer = new AsyncEventingBasicConsumer(channel);
+        getAvailableConsumer.Received += async (_, ea) =>
         {
             var response = HandleGetAvailable();
             Reply(channel, ea, response);
+            channel.BasicAck(ea.DeliveryTag, false);
+            await Task.CompletedTask;
         };
 
-        var assignOrderConsumer = new EventingBasicConsumer(channel);
-        assignOrderConsumer.Received += (_, ea) =>
+        var assignOrderConsumer = new AsyncEventingBasicConsumer(channel);
+        assignOrderConsumer.Received += async (_, ea) =>
         {
-            var response = HandleAssignOrder(ea.Body.ToArray());
-            Reply(channel, ea, response);
+            try
+            {
+                var response = HandleAssignOrder(ea.Body.ToArray());
+                Reply(channel, ea, response);
+                channel.BasicAck(ea.DeliveryTag, false);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to handle assign-order RPC");
+                channel.BasicNack(ea.DeliveryTag, false, true);
+            }
+            await Task.CompletedTask;
         };
 
-        channel.BasicConsume(GetAvailableQueue, autoAck: true, getAvailableConsumer);
-        channel.BasicConsume(AssignOrderQueue, autoAck: true, assignOrderConsumer);
+        channel.BasicConsume(GetAvailableQueue, autoAck: false, getAvailableConsumer);
+        channel.BasicConsume(AssignOrderQueue, autoAck: false, assignOrderConsumer);
 
-        stoppingToken.Register(() =>
-        {
-            channel.Dispose();
-            connection.Dispose();
-        });
-
+        stoppingToken.Register(() => { channel.Dispose(); connection.Dispose(); });
         return Task.Delay(Timeout.Infinite, stoppingToken);
     }
 
@@ -57,11 +66,9 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
         using var scope = serviceProvider.CreateScope();
         var driversService = scope.ServiceProvider.GetRequiredService<DriversService>();
         var driver = driversService.GetAvailableAsync().GetAwaiter().GetResult();
-
         var response = driver is null
             ? new GetAvailableDriverRpcResponse(false, null)
             : new GetAvailableDriverRpcResponse(true, new DriverSummary(driver.Id, driver.Name, driver.Status));
-
         return JsonSerializer.Serialize(response);
     }
 
@@ -73,16 +80,16 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
         using var scope = serviceProvider.CreateScope();
         var driversService = scope.ServiceProvider.GetRequiredService<DriversService>();
         var success = driversService.AssignOrderAsync(request.DriverId, request.OrderId).GetAwaiter().GetResult();
+        var driver = driversService.GetByIdAsync(request.DriverId).GetAwaiter().GetResult();
 
-        return JsonSerializer.Serialize(new AssignOrderRpcResponse(success));
+        return JsonSerializer.Serialize(new AssignOrderRpcResponse(success, driver?.Name, request.ClientId));
     }
 
     private static void Reply(IModel channel, BasicDeliverEventArgs ea, string response)
     {
         var replyProps = channel.CreateBasicProperties();
         replyProps.CorrelationId = ea.BasicProperties.CorrelationId;
-
         var responseBytes = Encoding.UTF8.GetBytes(response);
-        channel.BasicPublish(exchange: string.Empty, routingKey: ea.BasicProperties.ReplyTo, basicProperties: replyProps, body: responseBytes);
+        channel.BasicPublish(string.Empty, ea.BasicProperties.ReplyTo, replyProps, responseBytes);
     }
 }

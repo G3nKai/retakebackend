@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DriverService.Services;
 
-public class DriversService(DriverDbContext dbContext)
+public class DriversService(DriverDbContext dbContext, TokenService tokenService)
 {
-    public async Task<DriverResponse> RegisterAsync(RegisterDriverRequest request)
+    public async Task<AuthDriverResponse> RegisterAsync(RegisterDriverRequest request)
     {
         var login = request.Login.Trim();
         if (string.IsNullOrWhiteSpace(login))
@@ -35,10 +35,10 @@ public class DriversService(DriverDbContext dbContext)
         };
         dbContext.Drivers.Add(driver);
         await dbContext.SaveChangesAsync();
-        return ToResponse(driver);
+        return ToAuthResponse(driver, tokenService.GenerateDriverToken(driver));
     }
 
-    public async Task<DriverResponse?> LoginAsync(LoginDriverRequest request)
+    public async Task<AuthDriverResponse?> LoginAsync(LoginDriverRequest request)
     {
         var login = request.Login.Trim();
         if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(request.Password))
@@ -55,7 +55,7 @@ public class DriversService(DriverDbContext dbContext)
     public async Task<DriverResponse?> GetAvailableAsync()
     {
         var driver = await dbContext.Drivers.AsNoTracking().OrderBy(d => d.Id).FirstOrDefaultAsync(d => d.Status == DriverStatus.Available);
-        return driver is null ? null : ToResponse(driver);
+        return driver is null ? null : ToAuthResponse(driver, tokenService.GenerateDriverToken(driver));
     }
 
     public async Task<(bool Found, bool ValidStatus, DriverResponse? Driver)> UpdateManualStatusAsync(Guid id, string status)
@@ -81,6 +81,13 @@ public class DriversService(DriverDbContext dbContext)
         return true;
     }
 
+
+    public async Task<DriverResponse?> GetByIdAsync(Guid id)
+    {
+        var driver = await dbContext.Drivers.AsNoTracking().FirstOrDefaultAsync(d => d.Id == id);
+        return driver is null ? null : ToResponse(driver);
+    }
+
     public async Task<(bool DriverExists, List<Guid> OrderIds)> GetDriverOrdersAsync(Guid driverId)
     {
         var exists = await dbContext.Drivers.AnyAsync(x => x.Id == driverId);
@@ -96,6 +103,9 @@ public class DriversService(DriverDbContext dbContext)
     }
 
     private static DriverResponse ToResponse(Driver driver) => new(driver.Id, driver.Name, driver.Status.ToString());
+
+    private static AuthDriverResponse ToAuthResponse(Driver driver, string token) =>
+        new(driver.Id, driver.Name, driver.Status.ToString(), token);
 
     private static bool TryParseManualStatus(string status, out DriverStatus nextStatus)
     {

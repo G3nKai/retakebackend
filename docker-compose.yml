@@ -66,5 +66,23 @@ services:
     ports:
       - "8082:8080"
 
+
+  notificationservice:
+    build:
+      context: ./retakebackend
+      dockerfile: NotificationService/Dockerfile
+    container_name: notification-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      RabbitMq__Host: rabbitmq
+      RabbitMq__User: guest
+      RabbitMq__Password: guest
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    ports:
+      - "8083:8080"
+
 volumes:
   postgres_data:

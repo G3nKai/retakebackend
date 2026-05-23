@@ -27,11 +27,13 @@ public class OrdersService(OrderDbContext dbContext, DriverGatewayClient driverG
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var assigned = await driverGateway.AssignOrderToDriverAsync(availableDriver.Id, order.Id, cancellationToken);
-        if (!assigned)
+        var assigned = await driverGateway.AssignOrderToDriverAsync(availableDriver.Id, order.Id, request.ClientId, cancellationToken);
+        if (!assigned.Success)
         {
             return (false, null, "Unable to set driver to busy state");
         }
+
+        driverGateway.PublishOrderAssignedEvent(new OrderAssignedNotificationEvent(order.Id, availableDriver.Id, assigned.DriverName ?? availableDriver.Name, request.ClientId));
 
         return (true, ToResponse(order), null);
     }

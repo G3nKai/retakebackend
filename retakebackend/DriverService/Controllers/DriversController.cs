@@ -9,7 +9,7 @@ namespace DriverService.Controllers;
 public class DriversController(DriversService driversService) : ControllerBase
 {
     [HttpPost("register")]
-    public async Task<ActionResult<DriverResponse>> Register(RegisterDriverRequest request)
+    public async Task<ActionResult<AuthDriverResponse>> Register(RegisterDriverRequest request)
     {
         try
         {
@@ -26,11 +26,11 @@ public class DriversController(DriversService driversService) : ControllerBase
     }
 
     [HttpPost]
-    public Task<ActionResult<DriverResponse>> RegisterLegacy(RegisterDriverRequest request)
+    public Task<ActionResult<AuthDriverResponse>> RegisterLegacy(RegisterDriverRequest request)
         => Register(request);
 
     [HttpPost("login")]
-    public async Task<ActionResult<DriverResponse>> Login(LoginDriverRequest request)
+    public async Task<ActionResult<AuthDriverResponse>> Login(LoginDriverRequest request)
     {
         var driver = await driversService.LoginAsync(request);
         return driver is null ? Unauthorized() : Ok(driver);
