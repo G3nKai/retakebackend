@@ -26,22 +26,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
-
-  retakebackend:
-    build:
-      context: ./retakebackend
-      dockerfile: retakebackend/Dockerfile
-    container_name: retake-api
-    environment:
-      ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:8080
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=tododb;Username=postgres;Password=postgres
-    depends_on:
-      postgres:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-
   orderservice:
     build:
       context: ./retakebackend
