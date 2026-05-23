@@ -8,7 +8,7 @@ namespace DriverService.Controllers;
 [Route("drivers")]
 public class DriversController(DriversService driversService) : ControllerBase
 {
-    [HttpPost]
+    [HttpPost("register")]
     public async Task<ActionResult<DriverResponse>> Register(RegisterDriverRequest request)
     {
         try
@@ -24,6 +24,10 @@ public class DriversController(DriversService driversService) : ControllerBase
             return Conflict(ex.Message);
         }
     }
+
+    [HttpPost]
+    public Task<ActionResult<DriverResponse>> RegisterLegacy(RegisterDriverRequest request)
+        => Register(request);
 
     [HttpPost("login")]
     public async Task<ActionResult<DriverResponse>> Login(LoginDriverRequest request)
