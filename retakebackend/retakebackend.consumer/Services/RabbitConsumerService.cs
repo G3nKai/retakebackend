@@ -47,6 +47,12 @@ public class RabbitConsumerService(IServiceScopeFactory scopeFactory, IConfigura
 
     private async Task ApplyMessage(TodoMessage msg, CancellationToken ct)
     {
+        logger.LogInformation("Rabbit message received: EntityType={EntityType}, Action={Action}, Id={Id}, Payload={Payload}",
+            msg.EntityType,
+            msg.Action,
+            msg.Id,
+            msg.PayloadJson);
+
         using var scope = scopeFactory.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<ReplicaDbContext>();
 
@@ -63,6 +69,8 @@ public class RabbitConsumerService(IServiceScopeFactory scopeFactory, IConfigura
                 if (payload is null) return;
                 var existing = await db.TodoLists.FirstOrDefaultAsync(x => x.Id == payload.Id, ct);
                 if (existing is null) db.TodoLists.Add(payload); else existing.Title = payload.Title;
+
+                logger.LogInformation("TodoList replicated in consumer DB: Id={Id}, Title={Title}", payload.Id, payload.Title);
             }
         }
         if (msg.EntityType == "TodoItem")
@@ -79,6 +87,13 @@ public class RabbitConsumerService(IServiceScopeFactory scopeFactory, IConfigura
                 var existing = await db.TodoItems.FirstOrDefaultAsync(x => x.Id == payload.Id, ct);
                 if (existing is null) db.TodoItems.Add(payload);
                 else { existing.Title = payload.Title; existing.IsCompleted = payload.IsCompleted; existing.TodoListId = payload.TodoListId; }
+
+                logger.LogInformation(
+                    "TodoItem replicated in consumer DB: Id={Id}, Title={Title}, IsCompleted={IsCompleted}, TodoListId={TodoListId}",
+                    payload.Id,
+                    payload.Title,
+                    payload.IsCompleted,
+                    payload.TodoListId);
             }
         }
         await db.SaveChangesAsync(ct);
