@@ -1,14 +1,18 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using retakebackend.Data;
 using retakebackend.Dtos;
 using retakebackend.Models;
+using retakebackend.Services;
 
 namespace retakebackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class TodoItemsController(AppDbContext dbContext) : ControllerBase
+[Authorize]
+public class TodoItemsController(AppDbContext dbContext, RabbitPublisher publisher) : ControllerBase
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<TodoItemDto>>> GetAll()
@@ -51,6 +55,7 @@ public class TodoItemsController(AppDbContext dbContext) : ControllerBase
 
         dbContext.TodoItems.Add(item);
         await dbContext.SaveChangesAsync();
+        publisher.Publish(new("TodoItem", "Created", item.Id, JsonSerializer.Serialize(item)));
 
         var result = new TodoItemDto(item.Id, item.Title, item.IsCompleted, item.TodoListId);
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, result);
@@ -73,6 +78,7 @@ public class TodoItemsController(AppDbContext dbContext) : ControllerBase
         item.TodoListId = dto.TodoListId;
 
         await dbContext.SaveChangesAsync();
+        publisher.Publish(new("TodoItem", "Updated", item.Id, JsonSerializer.Serialize(item)));
         return NoContent();
     }
 
@@ -84,6 +90,7 @@ public class TodoItemsController(AppDbContext dbContext) : ControllerBase
 
         dbContext.TodoItems.Remove(item);
         await dbContext.SaveChangesAsync();
+        publisher.Publish(new("TodoItem", "Deleted", id, "{}"));
         return NoContent();
     }
 }
