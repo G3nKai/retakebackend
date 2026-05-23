@@ -24,8 +24,8 @@ public class DriverRpcConsumer(IServiceProvider serviceProvider, IConfiguration 
         var connection = _factory.CreateConnection();
         var channel = connection.CreateModel();
 
-        channel.QueueDeclare(GetAvailableQueue, durable: true, exclusive: false, autoDelete: false);
-        channel.QueueDeclare(AssignOrderQueue, durable: true, exclusive: false, autoDelete: false);
+        channel.QueueDeclare(GetAvailableQueue, durable: false, exclusive: false, autoDelete: false);
+        channel.QueueDeclare(AssignOrderQueue, durable: false, exclusive: false, autoDelete: false);
         channel.BasicQos(0, 1, false);
 
         var getAvailableConsumer = new AsyncEventingBasicConsumer(channel);

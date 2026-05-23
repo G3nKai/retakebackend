@@ -31,8 +31,8 @@ public class DriverGatewayClient : IDisposable
         _connection = factory.CreateConnection();
         _channel = _connection.CreateModel();
 
-        _channel.QueueDeclare(GetAvailableQueue, durable: true, exclusive: false, autoDelete: false);
-        _channel.QueueDeclare(AssignOrderQueue, durable: true, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(GetAvailableQueue, durable: false, exclusive: false, autoDelete: false);
+        _channel.QueueDeclare(AssignOrderQueue, durable: false, exclusive: false, autoDelete: false);
         _channel.QueueDeclare(NotificationQueue, durable: false, exclusive: false, autoDelete: false);
 
         var replyQueue = _channel.QueueDeclare(queue: string.Empty, durable: false, exclusive: true, autoDelete: true);
