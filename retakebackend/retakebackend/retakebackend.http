@@ -1,0 +1,6 @@
+@retakebackend_HostAddress = http://localhost:5142
+
+GET {{retakebackend_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

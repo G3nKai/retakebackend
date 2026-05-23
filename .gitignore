@@ -1,0 +1,68 @@
+# Build
+bin/
+obj/
+out/
+
+# User-specific files
+*.user
+*.rsuser
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio
+.vs/
+
+# Rider
+.idea/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+.nuget/
+
+# EF Core
+*.db
+*.db-shm
+*.db-wal
+
+# Publish
+publish/
+
+# Test Results
+TestResults/
+*.trx
+
+# Coverage
+coverage/
+*.coverage
+*.coveragexml
+
+# OS files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# Environment files
+.env
+.env.*
+
+# Secrets
+secrets.json
+appsettings.Development.json
+
+# Node modules if frontend exists
+node_modules/
+
+# Docker
+docker-compose.override.yml
+
+# Generated files
+Generated/
