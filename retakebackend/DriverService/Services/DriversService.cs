@@ -49,13 +49,13 @@ public class DriversService(DriverDbContext dbContext, TokenService tokenService
         var driver = await dbContext.Drivers.AsNoTracking()
             .FirstOrDefaultAsync(d => d.Login.ToLower() == login.ToLower() && d.Password == request.Password);
 
-        return driver is null ? null : ToResponse(driver);
+        return driver is null ? null : ToAuthResponse(driver, tokenService.GenerateDriverToken(driver));
     }
 
     public async Task<DriverResponse?> GetAvailableAsync()
     {
         var driver = await dbContext.Drivers.AsNoTracking().OrderBy(d => d.Id).FirstOrDefaultAsync(d => d.Status == DriverStatus.Available);
-        return driver is null ? null : ToAuthResponse(driver, tokenService.GenerateDriverToken(driver));
+        return driver is null ? null : ToResponse(driver);
     }
 
     public async Task<(bool Found, bool ValidStatus, DriverResponse? Driver)> UpdateManualStatusAsync(Guid id, string status)
