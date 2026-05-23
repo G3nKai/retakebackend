@@ -6,5 +6,6 @@ public class DriverOrderAssignment
     public Guid DriverId { get; set; }
     public Driver Driver { get; set; } = null!;
     public Guid OrderId { get; set; }
-    public DateTime AssignedAtUtc { get; set; } = DateTime.UtcNow;
+    public Order Order { get; set; }
+    public DateTime AssignedTime { get; set; } = DateTime.UtcNow;
 }

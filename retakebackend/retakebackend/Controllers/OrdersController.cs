@@ -19,12 +19,12 @@ public class OrdersController(AppDbContext dbContext) : ControllerBase
 
         if (availableDriver is null)
         {
-            return BadRequest("Нет свободных водителей в статусе 'На линии'.");
+            return BadRequest("No available drivers");
         }
 
         var order = new Order
         {
-            ClientName = request.ClientName,
+            ClientId = request.ClientId,
             PickupAddress = request.PickupAddress,
             DestinationAddress = request.DestinationAddress,
             DriverId = availableDriver.Id,
@@ -53,5 +53,5 @@ public class OrdersController(AppDbContext dbContext) : ControllerBase
     }
 
     private static OrderResponse ToResponse(Order order) =>
-        new(order.Id, order.ClientName, order.PickupAddress, order.DestinationAddress, order.Status.ToString(), order.DriverId, order.CreatedAtUtc);
+        new(order.Id, order.ClientId, order.PickupAddress, order.DestinationAddress, order.Status.ToString(), order.DriverId, order.CreatedTime);
 }
