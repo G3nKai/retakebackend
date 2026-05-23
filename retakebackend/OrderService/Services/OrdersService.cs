@@ -17,7 +17,7 @@ public class OrdersService(OrderDbContext dbContext, DriverGatewayClient driverG
 
         var order = new Order
         {
-            ClientId = request.ClientId,
+            ClientId = Guid.NewGuid(),
             PickupAddress = request.PickupAddress,
             DestinationAddress = request.DestinationAddress,
             DriverId = availableDriver.Id,
@@ -27,13 +27,13 @@ public class OrdersService(OrderDbContext dbContext, DriverGatewayClient driverG
         dbContext.Orders.Add(order);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var assigned = await driverGateway.AssignOrderToDriverAsync(availableDriver.Id, order.Id, request.ClientId, cancellationToken);
+        var assigned = await driverGateway.AssignOrderToDriverAsync(availableDriver.Id, order.Id, order.ClientId, cancellationToken);
         if (!assigned.Success)
         {
             return (false, null, "Unable to set driver to busy state");
         }
 
-        driverGateway.PublishOrderAssignedEvent(new OrderAssignedNotificationEvent(order.Id, availableDriver.Id, assigned.DriverName ?? availableDriver.Name, request.ClientId));
+        driverGateway.PublishOrderAssignedEvent(new OrderAssignedNotificationEvent(order.Id, availableDriver.Id, assigned.DriverName ?? availableDriver.Name, order.ClientId));
 
         return (true, ToResponse(order), null);
     }
