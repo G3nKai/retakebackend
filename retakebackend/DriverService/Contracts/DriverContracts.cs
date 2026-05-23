@@ -2,7 +2,8 @@ namespace DriverService.Contracts;
 
 public record DriverResponse(Guid Id, string Name, string Status);
 public record UpdateDriverStatusRequest(string Status);
-public record RegisterDriverRequest(string Name);
+public record RegisterDriverRequest(string Name, string Login, string Password);
+public record LoginDriverRequest(string Login, string Password);
 public record AssignOrderToDriverRequest(Guid OrderId);
 
 public record DriverSummary(Guid Id, string Name, string Status);

@@ -9,10 +9,47 @@ public class DriversService(DriverDbContext dbContext)
 {
     public async Task<DriverResponse> RegisterAsync(RegisterDriverRequest request)
     {
-        var driver = new Driver { Name = request.Name, Status = DriverStatus.Offline };
+        var login = request.Login.Trim();
+        if (string.IsNullOrWhiteSpace(login))
+        {
+            throw new ArgumentException("Логин обязателен.");
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Password))
+        {
+            throw new ArgumentException("Пароль обязателен.");
+        }
+
+        var exists = await dbContext.Drivers.AnyAsync(d => d.Login.ToLower() == login.ToLower());
+        if (exists)
+        {
+            throw new InvalidOperationException("Водитель с таким логином уже существует.");
+        }
+
+        var driver = new Driver
+        {
+            Name = request.Name,
+            Login = login,
+            Password = request.Password,
+            Status = DriverStatus.Offline
+        };
         dbContext.Drivers.Add(driver);
         await dbContext.SaveChangesAsync();
         return ToResponse(driver);
+    }
+
+    public async Task<DriverResponse?> LoginAsync(LoginDriverRequest request)
+    {
+        var login = request.Login.Trim();
+        if (string.IsNullOrWhiteSpace(login) || string.IsNullOrWhiteSpace(request.Password))
+        {
+            return null;
+        }
+
+        var driver = await dbContext.Drivers.AsNoTracking()
+            .FirstOrDefaultAsync(d => d.Login.ToLower() == login.ToLower() && d.Password == request.Password);
+
+        return driver is null ? null : ToResponse(driver);
     }
 
     public async Task<DriverResponse?> GetAvailableAsync()

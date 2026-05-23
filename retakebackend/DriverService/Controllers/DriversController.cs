@@ -10,7 +10,27 @@ public class DriversController(DriversService driversService) : ControllerBase
 {
     [HttpPost]
     public async Task<ActionResult<DriverResponse>> Register(RegisterDriverRequest request)
-        => Ok(await driversService.RegisterAsync(request));
+    {
+        try
+        {
+            return Ok(await driversService.RegisterAsync(request));
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(ex.Message);
+        }
+    }
+
+    [HttpPost("login")]
+    public async Task<ActionResult<DriverResponse>> Login(LoginDriverRequest request)
+    {
+        var driver = await driversService.LoginAsync(request);
+        return driver is null ? Unauthorized() : Ok(driver);
+    }
 
     [HttpGet("available")]
     public async Task<ActionResult<DriverResponse>> GetAvailable()
