@@ -1,3 +1,4 @@
 <Solution>
-  <Project Path="retakebackend/retakebackend.csproj" />
+  <Project Path="OrderService/OrderService.csproj" />
+  <Project Path="DriverService/DriverService.csproj" />
 </Solution>
