@@ -1,21 +1,22 @@
 using Microsoft.AspNetCore.Mvc;
 using retakebackend.Auth;
+using retakebackend.Services;
 
 namespace retakebackend.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController(JwtTokenService tokenService) : ControllerBase
+public class AuthController(AuthService authService) : ControllerBase
 {
     [HttpPost("login")]
     public IActionResult Login(LoginRequest request)
     {
-        if (request.Username != "admin" || request.Password != "admin")
+        var token = authService.Login(request.Username, request.Password);
+        if (token is null)
         {
             return Unauthorized();
         }
 
-        var token = tokenService.CreateToken(request.Username);
         return Ok(new { accessToken = token });
     }
 }
